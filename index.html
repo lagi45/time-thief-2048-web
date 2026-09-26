@@ -1,0 +1,1514 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>时间小偷</title>
+<meta name="description" content="合并同数字方块，拼出 2048。打开即玩，无需安装。">
+<meta name="theme-color" content="#bbada0">
+<link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2064%2064'%3E%3Crect%20width='64'%20height='64'%20rx='14'%20fill='%23bbada0'/%3E%3Crect%20x='10'%20y='10'%20width='20'%20height='20'%20rx='5'%20fill='%23eee4da'/%3E%3Crect%20x='34'%20y='10'%20width='20'%20height='20'%20rx='5'%20fill='%23f2b179'/%3E%3Crect%20x='10'%20y='34'%20width='20'%20height='20'%20rx='5'%20fill='%23f59563'/%3E%3Crect%20x='34'%20y='34'%20width='20'%20height='20'%20rx='5'%20fill='%23edc22e'/%3E%3C/svg%3E">
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2064%2064'%3E%3Crect%20width='64'%20height='64'%20rx='14'%20fill='%23bbada0'/%3E%3Crect%20x='10'%20y='10'%20width='20'%20height='20'%20rx='5'%20fill='%23eee4da'/%3E%3Crect%20x='34'%20y='10'%20width='20'%20height='20'%20rx='5'%20fill='%23f2b179'/%3E%3Crect%20x='10'%20y='34'%20width='20'%20height='20'%20rx='5'%20fill='%23f59563'/%3E%3Crect%20x='34'%20y='34'%20width='20'%20height='20'%20rx='5'%20fill='%23edc22e'/%3E%3C/svg%3E">
+<meta property="og:type" content="website">
+<meta property="og:title" content="时间小偷">
+<meta property="og:description" content="合并同数字方块，拼出 2048。打开即玩，无需安装。">
+<meta property="og:image" content="https://10b243a4285f46048a2859b35c61bd6e.sg.agentos-app.run/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="时间小偷">
+<meta name="twitter:description" content="合并同数字方块，拼出 2048。打开即玩，无需安装。">
+<meta name="twitter:image" content="https://10b243a4285f46048a2859b35c61bd6e.sg.agentos-app.run/og.png">
+<style>
+  :root{
+    /* 棋盘边长：先给静态兜底值，加载后由 JS 按视口精算（见 fitBoard）。
+       刻意不用 clamp()/min() —— 老版本 iOS Safari 不支持这些函数，
+       而自定义属性不会退回上一条声明，会让整个棋盘失去宽度。 */
+    --board: 320px;
+    --bg-1:#faf7f2;
+    --bg-2:#f1ebe2;
+    --ink:#5c534b;
+    --ink-soft:#9c9086;
+    --card:#ffffff;
+    --board-bg:#bbada0;
+    --cell-bg:rgba(238,228,218,.38);
+    --radius:14px;
+  }
+
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+
+  html{-webkit-text-size-adjust:100%}
+  html,body{height:100%}
+  body{
+    margin:0;
+    display:flex;
+    padding:18px;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",
+                "PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+    color:var(--ink);
+    background:
+      radial-gradient(1200px 600px at 12% -8%, #fffdf9 0%, transparent 60%),
+      radial-gradient(900px 500px at 92% 108%, #efe6da 0%, transparent 58%),
+      linear-gradient(160deg,var(--bg-1),var(--bg-2));
+    min-height:100vh;            /* 不认 dvh 的老浏览器走这行 */
+    min-height:100dvh;
+    overflow-x:hidden;
+    overflow-y:auto;             /* 宁可能滚动，也不要内容被裁掉 */
+  }
+
+  .app{
+    width:100%;
+    max-width:calc(var(--board) + 4px);
+    margin:auto;                 /* 安全居中：内容比视口高时顶部不会被裁掉 */
+    display:flex;
+    flex-direction:column;
+    gap:14px;
+  }
+
+  /* ---------- 顶部 ---------- */
+  header{
+    display:flex;
+    align-items:flex-end;
+    justify-content:space-between;
+    gap:12px;
+  }
+
+  .brand h1{
+    margin:0;
+    font-size:34px;                          /* clamp() 兜底 */
+    font-size:clamp(30px,7.2vw,44px);
+    font-weight:800;
+    letter-spacing:-.035em;
+    line-height:1;
+    color:#6b6058;                           /* 渐变文字不支持时也不会变成隐形标题 */
+    background:linear-gradient(140deg,#8d7f73,#5c534b 60%);
+    -webkit-background-clip:text;
+    background-clip:text;
+  }
+  @supports ((-webkit-background-clip:text) or (background-clip:text)){
+    .brand h1{color:transparent}
+  }
+  .brand p{
+    margin:6px 0 0;
+    font-size:12.5px;
+    color:var(--ink-soft);
+    letter-spacing:.01em;
+  }
+
+  .scores{display:flex;gap:8px}
+
+  .score-box{
+    position:relative;
+    min-width:74px;
+    padding:7px 12px 9px;
+    text-align:center;
+    background:var(--board-bg);
+    border-radius:10px;
+    color:#f9f6f2;
+    box-shadow:0 2px 0 rgba(0,0,0,.06), inset 0 1px 0 rgba(255,255,255,.18);
+  }
+  .score-box .label{
+    display:block;
+    font-size:10.5px;
+    letter-spacing:.16em;
+    text-transform:uppercase;
+    opacity:.72;
+    font-weight:600;
+  }
+  .score-box .value{
+    display:block;
+    font-size:19px;
+    font-weight:800;
+    line-height:1.15;
+    font-variant-numeric:tabular-nums;
+  }
+  .score-box.bump .value{animation:bump 260ms cubic-bezier(.3,1.4,.5,1)}
+  @keyframes bump{0%{transform:scale(1)}45%{transform:scale(1.16)}100%{transform:scale(1)}}
+
+  .float-score{
+    position:absolute;
+    left:50%;
+    top:6px;
+    transform:translateX(-50%);
+    font-size:17px;
+    font-weight:800;
+    color:#776e65;
+    pointer-events:none;
+    animation:floatUp 720ms cubic-bezier(.2,.7,.3,1) forwards;
+  }
+  @keyframes floatUp{
+    0%{opacity:0;transform:translate(-50%,6px) scale(.85)}
+    22%{opacity:1}
+    100%{opacity:0;transform:translate(-50%,-34px) scale(1.05)}
+  }
+
+  /* ---------- 棋盘 ---------- */
+  .board{
+    --gap: calc(var(--board) * .028);
+    --cell: calc((var(--board) - 5 * var(--gap)) / 4);
+    position:relative;
+    width:var(--board);
+    height:var(--board);
+    padding:var(--gap);
+    background:var(--board-bg);
+    border-radius:calc(var(--board) * .032);
+    box-shadow:
+      0 14px 30px -12px rgba(97,80,65,.42),
+      0 2px 0 rgba(255,255,255,.4) inset;
+    font-size:calc(var(--cell) * .44);
+    touch-action:none;
+    -webkit-user-select:none;
+    user-select:none;
+    -webkit-touch-callout:none;
+  }
+
+  .grid-bg{
+    position:absolute;
+    top:var(--gap);right:var(--gap);bottom:var(--gap);left:var(--gap);
+    inset:var(--gap);            /* 老 Safari 不认 inset，靠上面四行兜底 */
+    display:grid;
+    grid-template-columns:repeat(4,1fr);
+    grid-template-rows:repeat(4,1fr);
+    gap:var(--gap);
+  }
+  .grid-bg i{
+    background:var(--cell-bg);
+    border-radius:calc(var(--cell) * .115);
+  }
+
+  .tiles{
+    position:absolute;
+    top:var(--gap);right:var(--gap);bottom:var(--gap);left:var(--gap);
+    inset:var(--gap);
+  }
+
+  .tile{
+    position:absolute;
+    top:0;left:0;
+    width:var(--cell);
+    height:var(--cell);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    border-radius:calc(var(--cell) * .115);
+    font-weight:800;
+    letter-spacing:-.02em;
+    font-variant-numeric:tabular-nums;
+    transform:translate(
+      calc(var(--c) * (var(--cell) + var(--gap))),
+      calc(var(--r) * (var(--cell) + var(--gap)))
+    );
+    transition:transform 110ms cubic-bezier(.35,.9,.4,1);
+    will-change:transform;
+    -webkit-backface-visibility:hidden;
+    backface-visibility:hidden;
+  }
+
+  .tile.v3{font-size:.8em}
+  .tile.v4{font-size:.65em}
+  .tile.v5{font-size:.52em}
+
+  /* 经典色阶 */
+  .t2   {background:#eee4da;color:#776e65}
+  .t4   {background:#ede0c8;color:#776e65}
+  .t8   {background:#f2b179;color:#f9f6f2}
+  .t16  {background:#f59563;color:#f9f6f2}
+  .t32  {background:#f67c5f;color:#f9f6f2}
+  .t64  {background:#f65e3b;color:#f9f6f2}
+  .t128 {background:#edcf72;color:#f9f6f2;box-shadow:0 0 22px -4px rgba(237,207,114,.85)}
+  .t256 {background:#edcc61;color:#f9f6f2;box-shadow:0 0 24px -3px rgba(237,204,97,.9)}
+  .t512 {background:#edc850;color:#f9f6f2;box-shadow:0 0 26px -2px rgba(237,200,80,.95)}
+  .t1024{background:#edc53f;color:#f9f6f2;box-shadow:0 0 28px -1px rgba(237,197,63,1)}
+  .t2048{background:#edc22e;color:#f9f6f2;box-shadow:0 0 34px 0 rgba(237,194,46,1)}
+  .tsuper{background:#3c3a32;color:#f9f6f2;box-shadow:0 0 34px 0 rgba(60,58,50,.8)}
+
+  /* ---------- 控制条 ---------- */
+  .bar{
+    display:flex;
+    align-items:center;
+    gap:8px;
+  }
+
+  button{
+    font:inherit;
+    font-weight:700;
+    font-size:13.5px;
+    color:#f9f6f2;
+    background:var(--board-bg);
+    border:0;
+    border-radius:10px;
+    padding:10px 16px;
+    cursor:pointer;
+    box-shadow:0 2px 0 rgba(0,0,0,.08), inset 0 1px 0 rgba(255,255,255,.18);
+    transition:transform 90ms ease, filter 140ms ease, opacity 140ms ease;
+  }
+  button:hover{filter:brightness(1.05)}
+  button:active{transform:translateY(1px)}
+  button:disabled{opacity:.42;cursor:default;transform:none}
+
+  .ghost{
+    background:transparent;
+    color:var(--ink-soft);
+    box-shadow:inset 0 0 0 1.5px rgba(156,144,134,.42);
+  }
+  .ghost:hover{color:var(--ink);box-shadow:inset 0 0 0 1.5px rgba(92,83,75,.55)}
+
+  .spacer{flex:1}
+
+  .hint{
+    font-size:11.5px;
+    line-height:1.6;
+    color:var(--ink-soft);
+    text-align:center;
+    letter-spacing:.01em;
+  }
+  .hint kbd{
+    font:inherit;
+    font-size:10.5px;
+    font-weight:700;
+    background:rgba(187,173,160,.22);
+    border-radius:5px;
+    padding:1.5px 5px;
+    color:#7d7166;
+  }
+
+  /* ---------- 遮罩 ---------- */
+  .overlay{
+    position:absolute;
+    top:0;right:0;bottom:0;left:0;
+    inset:0;
+    border-radius:inherit;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    gap:6px;
+    text-align:center;
+    padding:22px;
+    overflow-y:auto;
+    background:rgba(250,247,242,.86);
+    -webkit-backdrop-filter:blur(7px);
+    backdrop-filter:blur(7px);
+    opacity:0;
+    visibility:hidden;
+    transition:opacity 240ms ease, visibility 240ms;
+    z-index:5;
+  }
+  .overlay.show{opacity:1;visibility:visible}
+  .overlay h2{
+    margin:0;
+    font-size:28px;                          /* clamp() 兜底 */
+    font-size:clamp(24px,6vw,34px);
+    font-weight:800;
+    letter-spacing:-.03em;
+    color:#6b6058;
+  }
+  .overlay p{
+    margin:2px 0 14px;
+    font-size:13px;
+    color:var(--ink-soft);
+  }
+  .overlay .row{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
+
+  /* ---------- 微信内置浏览器引导条 ----------
+     只做「建议在浏览器打开」的提示，不做自动跳转、不做诱导分享。
+     刻意不用 flex gap，避免老 iOS 上间距消失。 */
+  .wx-tip{
+    display:flex;
+    align-items:center;
+    padding:10px 12px;
+    border:1px solid #f0dfc4;
+    border-radius:14px;
+    background:#fff7e8;
+    font-size:12.5px;
+    line-height:1.5;
+    color:#7a5a2a;
+  }
+  .wx-tip[hidden]{display:none}          /* display:flex 会盖掉 hidden 的默认行为 */
+  .wx-tip-txt{margin-right:10px}
+  .wx-tip b{font-weight:800}
+  .wx-tip-btn{
+    margin-left:auto;
+    flex:0 0 auto;
+    padding:7px 14px;
+    font-size:12.5px;
+    border-radius:999px;
+  }
+
+  .confetti{
+    position:absolute;
+    width:8px;height:8px;
+    border-radius:2px;
+    pointer-events:none;
+    animation:confetti 1100ms ease-out forwards;
+  }
+  @keyframes confetti{
+    0%{opacity:1;transform:translate(0,0) rotate(0)}
+    100%{opacity:0;transform:translate(var(--dx),var(--dy)) rotate(var(--rot))}
+  }
+
+  /* ---------- 上榜表单 ---------- */
+  .submit-box{
+    display:none;
+    width:100%;
+    max-width:300px;
+    margin:2px 0 14px;
+    flex-direction:column;
+    align-items:center;
+    gap:7px;
+  }
+  .submit-box.show{display:flex}
+  .submit-row{display:flex;gap:8px;width:100%}
+  .submit-box input{
+    flex:1;min-width:0;
+    font:inherit;font-size:13.5px;
+    padding:10px 12px;
+    border:0;border-radius:10px;
+    background:#fff;
+    color:var(--ink);
+    box-shadow:inset 0 0 0 1.5px rgba(187,173,160,.5);
+    outline:none;
+  }
+  .submit-box input:focus{box-shadow:inset 0 0 0 1.5px rgba(140,124,108,.9)}
+  .submit-msg{font-size:12px;color:var(--ink-soft);min-height:16px;text-align:center}
+
+  /* ---------- 排行榜 ---------- */
+  .lb{
+    position:fixed;
+    top:0;right:0;bottom:0;left:0;
+    inset:0;                     /* 老 Safari 不认 inset，靠上面四行兜底 */
+    z-index:50;
+    display:flex;align-items:center;justify-content:center;
+    padding:20px;
+    background:rgba(60,52,45,.42);
+    -webkit-backdrop-filter:blur(4px);
+    backdrop-filter:blur(4px);
+    opacity:0;visibility:hidden;
+    transition:opacity 200ms ease, visibility 200ms;
+  }
+  .lb.show{opacity:1;visibility:visible}
+  .lb-card{
+    width:100%;max-width:380px;
+    max-height:78vh;                         /* min() 兜底 */
+    max-height:min(78vh,560px);
+    display:flex;flex-direction:column;
+    background:#fdfbf8;
+    border-radius:16px;
+    box-shadow:0 24px 60px -18px rgba(80,64,50,.5);
+    overflow:hidden;
+  }
+  .lb-head{
+    display:flex;align-items:center;justify-content:space-between;
+    gap:10px;
+    padding:15px 16px 12px;
+    border-bottom:1px solid rgba(187,173,160,.28);
+  }
+  .lb-head h3{margin:0;font-size:15px;font-weight:800;color:#5c534b}
+  .lb-head button{padding:7px 12px;font-size:12.5px}
+  .lb-list{overflow-y:auto;padding:6px 10px 10px;flex:1}
+  .lb-row{display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:10px}
+  .lb-row.me{background:rgba(237,194,46,.18);box-shadow:inset 0 0 0 1.5px rgba(237,194,46,.62)}
+  .lb-rank{
+    flex:0 0 auto;width:26px;height:26px;border-radius:8px;
+    display:flex;align-items:center;justify-content:center;
+    font-size:12px;font-weight:800;
+    background:rgba(187,173,160,.24);color:#7d7166;
+    font-variant-numeric:tabular-nums;
+  }
+  .lb-row.top1 .lb-rank{background:#edc22e;color:#fff}
+  .lb-row.top2 .lb-rank{background:#edcf72;color:#fff}
+  .lb-row.top3 .lb-rank{background:#f0b27a;color:#fff}
+  .lb-name{
+    flex:1;min-width:0;font-size:13.5px;font-weight:600;color:#5c534b;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  }
+  .lb-tile{
+    flex:0 0 auto;font-size:10.5px;font-weight:700;
+    padding:2px 6px;border-radius:6px;
+    background:rgba(187,173,160,.2);color:#8b7f74;
+    font-variant-numeric:tabular-nums;
+  }
+  .lb-score{
+    flex:0 0 auto;min-width:54px;text-align:right;
+    font-size:14px;font-weight:800;color:#5c534b;
+    font-variant-numeric:tabular-nums;
+  }
+  .lb-empty{padding:36px 16px;text-align:center;font-size:13px;line-height:1.8;color:var(--ink-soft)}
+  .lb-foot{
+    padding:10px 16px 13px;
+    font-size:11.5px;color:#b3a89e;text-align:center;
+    border-top:1px solid rgba(187,173,160,.22);
+  }
+
+  /* ---------- 本周 / 总榜 切换 ---------- */
+  .lb-tabs{display:flex;gap:6px;padding:11px 14px 2px}
+  .lb-tab{
+    flex:1;
+    padding:8px 10px;
+    font-size:12.5px;font-weight:700;
+    color:var(--ink-soft);
+    background:transparent;
+    box-shadow:inset 0 0 0 1.5px rgba(187,173,160,.45);
+  }
+  .lb-tab.active{
+    color:#f9f6f2;
+    background:var(--board-bg);
+    box-shadow:0 2px 0 rgba(0,0,0,.08), inset 0 1px 0 rgba(255,255,255,.18);
+  }
+  .lb-tab.active:hover{filter:none}
+
+  /* ---------- 前 3 名领奖台 ---------- */
+  .podium{display:flex;align-items:flex-end;gap:7px;padding:14px 10px 0}
+  .pd{
+    flex:1;min-width:0;
+    display:flex;flex-direction:column;align-items:center;justify-content:flex-end;
+    gap:4px;
+  }
+  .pd-name{
+    font-size:11.5px;font-weight:700;color:#5c534b;
+    max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  }
+  .pd-score{font-size:11px;color:#8b7f74;font-variant-numeric:tabular-nums}
+  .pd-meta{display:flex;align-items:center;justify-content:center;gap:4px;max-width:100%}
+  .pd-tile{
+    font-size:10px;font-weight:700;
+    padding:1px 5px;border-radius:5px;
+    background:rgba(187,173,160,.22);color:#8b7f74;
+    font-variant-numeric:tabular-nums;
+  }
+  .pd-bar{
+    width:100%;
+    display:flex;align-items:center;justify-content:center;
+    border-radius:9px 9px 0 0;
+    font-size:15px;font-weight:800;color:#fff;
+    font-variant-numeric:tabular-nums;
+  }
+  .pd1 .pd-bar{height:60px;background:#edc22e}
+  .pd2 .pd-bar{height:46px;background:#b9c0c6}
+  .pd3 .pd-bar{height:36px;background:#d99b62}
+  .pd.me .pd-name{color:#0f6e56}
+  .pd.me .pd-bar{box-shadow:0 0 0 2px rgba(15,110,86,.55)}
+  .lb-sep{height:1px;background:rgba(187,173,160,.25);margin:0 10px 6px}
+
+  @media (max-width:400px){
+    .brand p{display:none}
+    .score-box{min-width:64px;padding:6px 9px 8px}
+    .score-box .value{font-size:17px}
+    button{padding:9px 12px;font-size:12.5px}
+  }
+
+  /* ---------- 老浏览器降级 ---------- */
+
+  /* 不支持背景模糊时，把遮罩调实一点，保证文字仍然看得清 */
+  @supports not ((backdrop-filter:blur(7px)) or (-webkit-backdrop-filter:blur(7px))){
+    .overlay{background:rgba(250,247,242,.97)}
+    .lb{background:rgba(60,52,45,.74)}
+  }
+
+  /* 没有 Web Animations / 不支持独立的 scale 属性时，用 CSS 关键帧顶上。
+     注意关键帧里必须自己带上 translate，因为 transform 被定位占用了。 */
+  @keyframes tileIn{
+    from{
+      opacity:0;
+      transform:translate(calc(var(--c) * (var(--cell) + var(--gap))), calc(var(--r) * (var(--cell) + var(--gap)))) scale(.35);
+    }
+    to{
+      opacity:1;
+      transform:translate(calc(var(--c) * (var(--cell) + var(--gap))), calc(var(--r) * (var(--cell) + var(--gap)))) scale(1);
+    }
+  }
+  @keyframes tilePop{
+    0%  {transform:translate(calc(var(--c) * (var(--cell) + var(--gap))), calc(var(--r) * (var(--cell) + var(--gap)))) scale(1)}
+    45% {transform:translate(calc(var(--c) * (var(--cell) + var(--gap))), calc(var(--r) * (var(--cell) + var(--gap)))) scale(1.16)}
+    100%{transform:translate(calc(var(--c) * (var(--cell) + var(--gap))), calc(var(--r) * (var(--cell) + var(--gap)))) scale(1)}
+  }
+  .tile.anim-in {animation:tileIn 150ms cubic-bezier(.3,1.3,.5,1) backwards}
+  .tile.anim-pop{animation:tilePop 170ms cubic-bezier(.3,1.4,.5,1)}
+
+  /* flex gap 在 iOS 14.1 之前无效；由 JS 探测后给 <html> 加 .no-flexgap，
+     改用相邻兄弟外边距来撑开间距。 */
+  .no-flexgap .app > * + *{margin-top:14px}
+  .no-flexgap header > * + *{margin-left:12px}
+  .no-flexgap .scores > * + *{margin-left:8px}
+  .no-flexgap .bar > * + *{margin-left:8px}
+  .no-flexgap .overlay .row > * + *{margin-left:8px}
+  .no-flexgap .submit-box > * + *{margin-top:7px}
+  .no-flexgap .submit-row > * + *{margin-left:8px}
+  .no-flexgap .lb-head > * + *{margin-left:10px}
+  .no-flexgap .lb-tabs > * + *{margin-left:6px}
+  .no-flexgap .lb-row > * + *{margin-left:9px}
+  .no-flexgap .podium > * + *{margin-left:7px}
+  .no-flexgap .pd-meta > * + *{margin-left:4px}
+</style>
+</head>
+<body>
+
+<div class="app">
+  <div class="wx-tip" id="wxTip" hidden>
+    <span class="wx-tip-txt">微信内置浏览器可能拦这个链接。<br>想顺畅玩，点右上角 <b>···</b> 选「在浏览器打开」。</span>
+    <button class="wx-tip-btn" id="wxTipClose">继续玩</button>
+  </div>
+  <header>
+    <div class="brand">
+      <h1>时间小偷</h1>
+      <p>合并同数字方块，拼出 2048</p>
+    </div>
+    <div class="scores">
+      <div class="score-box" id="scoreBox">
+        <span class="label">Score</span>
+        <span class="value" id="score">0</span>
+      </div>
+      <div class="score-box" id="bestBox">
+        <span class="label">Best</span>
+        <span class="value" id="best">0</span>
+      </div>
+    </div>
+  </header>
+
+  <div class="board" id="board">
+    <div class="grid-bg">
+      <i></i><i></i><i></i><i></i>
+      <i></i><i></i><i></i><i></i>
+      <i></i><i></i><i></i><i></i>
+      <i></i><i></i><i></i><i></i>
+    </div>
+    <div class="tiles" id="tiles"></div>
+
+    <div class="overlay" id="overlay">
+      <h2 id="ovTitle">游戏结束</h2>
+      <p id="ovText">没有可以移动的方块了</p>
+      <div class="submit-box" id="submitBox">
+        <div class="submit-row">
+          <input id="nameInput" maxlength="12" placeholder="你的昵称" autocomplete="off" spellcheck="false">
+          <button id="submitBtn">上榜</button>
+        </div>
+        <div class="submit-msg" id="submitMsg"></div>
+      </div>
+      <div class="row">
+        <button id="ovBtn">再来一局</button>
+        <button class="ghost" id="ovBtn2">撤销一步</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="bar">
+    <button id="newBtn">新游戏</button>
+    <button class="ghost" id="undoBtn" disabled>撤销</button>
+    <button class="ghost" id="lbBtn">排行榜</button>
+    <button class="ghost" id="soundBtn">🔊</button>
+    <span class="spacer"></span>
+  </div>
+
+  <p class="hint">
+    <kbd>↑</kbd><kbd>↓</kbd><kbd>←</kbd><kbd>→</kbd> 或 <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 移动 · 手机可滑动 · <kbd>Z</kbd> 撤销
+  </p>
+</div>
+
+<div class="lb" id="lb">
+  <div class="lb-card">
+    <div class="lb-head">
+      <h3>排行榜</h3>
+      <button class="ghost" id="lbClose">关闭</button>
+    </div>
+    <div class="lb-tabs">
+      <button class="lb-tab" id="tabWeek">本周</button>
+      <button class="lb-tab" id="tabAll">总榜</button>
+    </div>
+    <div class="lb-list" id="lbList"></div>
+    <div class="lb-foot" id="lbFoot">玩完一局即可上榜</div>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  /* ============ 能力探测（老 Safari 兼容） ============ */
+
+  /* flex gap：iOS 14.1 起才支持，探测不到就加 .no-flexgap 用 margin 兜底 */
+  (function () {
+    try {
+      var p = document.createElement('div');
+      p.style.cssText = 'display:flex;gap:1px;position:absolute;left:-9999px;top:0;visibility:hidden';
+      p.appendChild(document.createElement('i'));
+      p.appendChild(document.createElement('i'));
+      document.body.appendChild(p);
+      var ok = false;
+      try { ok = (getComputedStyle(p).columnGap || '') === '1px'; } catch (e2) {}
+      document.body.removeChild(p);
+      if (!ok) document.documentElement.className += ' no-flexgap';
+    } catch (e) { /* 探测失败就保持现状，最多是间距小一点 */ }
+  })();
+
+  /* Web Animations + 独立的 scale 属性：两者都有才能用 scale 做动画 */
+  var CAN_ANIM = false;
+  (function () {
+    try {
+      var w = window;
+      if (!w.Element || !w.Element.prototype || typeof w.Element.prototype.animate !== 'function') return;
+      if (!w.CSS || typeof w.CSS.supports !== 'function') return;
+      if (!w.CSS.supports('scale', '1')) return;
+      var probe = document.createElement('div');
+      var anim = probe.animate([{ scale: '1' }, { scale: '1.2' }], { duration: 1 });
+      if (!anim) return;
+      var kf = (anim.effect && anim.effect.getKeyframes) ? anim.effect.getKeyframes() : null;
+      if (typeof anim.cancel === 'function') anim.cancel();
+      /* 关键帧里 scale 被丢掉，说明只是"语法通过"而已，照样走 CSS 兜底 */
+      CAN_ANIM = !!(kf && kf.length && ('scale' in kf[0]));
+    } catch (e) { CAN_ANIM = false; }
+  })();
+
+  /* 统一的缩放动画入口：优先 WAAPI，不行就退回 CSS 关键帧 */
+  function animScale(el, frames, opts, fallbackClass) {
+    if (CAN_ANIM) {
+      try { el.animate(frames, opts); return; } catch (e) { /* 落到 CSS 兜底 */ }
+    }
+    if (!fallbackClass || !el.classList) return;
+    try {
+      el.classList.remove(fallbackClass);
+      void el.offsetWidth;                       /* 强制重排，让动画能重播 */
+      el.classList.add(fallbackClass);
+      var ms = (opts && opts.duration ? opts.duration : 200) + 60;
+      setTimeout(function () {
+        try { el.classList.remove(fallbackClass); } catch (e) {}
+      }, ms);
+    } catch (e) {}
+  }
+
+  var SIZE = 4;
+  var SLIDE_MS = 110;
+
+  var tilesEl   = document.getElementById('tiles');
+  var boardEl   = document.getElementById('board');
+  var scoreEl   = document.getElementById('score');
+  var bestEl    = document.getElementById('best');
+  var scoreBox  = document.getElementById('scoreBox');
+  var bestBox   = document.getElementById('bestBox');
+  var overlay   = document.getElementById('overlay');
+  var ovTitle   = document.getElementById('ovTitle');
+  var ovText    = document.getElementById('ovText');
+  var ovBtn     = document.getElementById('ovBtn');
+  var ovBtn2    = document.getElementById('ovBtn2');
+  var newBtn    = document.getElementById('newBtn');
+  var undoBtn   = document.getElementById('undoBtn');
+  var soundBtn  = document.getElementById('soundBtn');
+  var lbBtn     = document.getElementById('lbBtn');
+  var lb        = document.getElementById('lb');
+  var lbList    = document.getElementById('lbList');
+  var lbFoot    = document.getElementById('lbFoot');
+  var lbClose   = document.getElementById('lbClose');
+  var submitBox = document.getElementById('submitBox');
+  var nameInput = document.getElementById('nameInput');
+  var submitBtn = document.getElementById('submitBtn');
+  var submitMsg = document.getElementById('submitMsg');
+  var tabWeek   = document.getElementById('tabWeek');
+  var tabAll    = document.getElementById('tabAll');
+  var wxTip     = document.getElementById('wxTip');
+  var wxTipClose = document.getElementById('wxTipClose');
+
+  /* ============ 微信内置浏览器引导条 ============
+     只做「建议在浏览器打开」的提示；不做自动跳转、不做"分享才能继续"这类诱导
+     （那两类行为本身会加重微信的风险判定）。
+     刻意在这里就显示：后面的 measureChrome() 要把它算进 chromeH，棋盘尺寸才准。 */
+  var WX_TIP_KEY = 'wx-tip-off-2048';
+  (function () {
+    try {
+      var ua = (navigator && navigator.userAgent) || '';
+      if (ua.indexOf('MicroMessenger') === -1) return;        /* 不在微信里就不打扰 */
+      try { if (localStorage.getItem(WX_TIP_KEY) === '1') return; } catch (e) {}
+      if (!wxTip) return;
+      wxTip.hidden = false;
+      if (wxTipClose) {
+        wxTipClose.addEventListener('click', function () {
+          wxTip.hidden = true;
+          try { localStorage.setItem(WX_TIP_KEY, '1'); } catch (e) {}
+          relayout();                                          /* 高度变了，重算棋盘 */
+        });
+      }
+    } catch (e) {}
+  })();
+
+  /* ============ 自适应尺寸 ============ */
+  /* 用 JS 算棋盘边长，替代 clamp()/min()，老 Safari 也不会布局崩掉。
+     chromeH = 棋盘之外（标题、按钮条、提示、间距、内边距）占用的高度。 */
+  var chromeH = 0;
+  var lastBoard = 0;
+
+  function fitBoard() {
+    var de = document.documentElement || {};
+    var vw = window.innerWidth  || de.clientWidth  || 360;
+    var vh = window.innerHeight || de.clientHeight || 640;
+    var room = chromeH > 0 ? chromeH : 218;        /* 还没量到就先用估算值 */
+    var b = Math.floor(Math.min(vw - 36, vh - room, 440));
+    if (!(b > 0)) b = 320;
+    if (b < 272) b = 272;                          /* 宁可略微溢出，也别小到没法玩 */
+    if (lastBoard && Math.abs(b - lastBoard) < 8) return;   /* 抖动抑制（iOS 工具栏收放） */
+    lastBoard = b;
+    try { de.style.setProperty('--board', b + 'px'); } catch (e) {}
+  }
+
+  function measureChrome() {
+    try {
+      var app = document.querySelector('.app');
+      if (!app || !app.getBoundingClientRect || !boardEl.getBoundingClientRect) return;
+      var h = app.getBoundingClientRect().height - boardEl.getBoundingClientRect().height;
+      if (h > 40 && h < 500) chromeH = Math.round(h) + 8;
+    } catch (e) {}
+  }
+
+  var tiles = [];
+  var score = 0;
+  /* 旧版 Safari 无痕模式下读写 localStorage 会直接抛异常，必须兜住，否则整页脚本挂掉 */
+  var best = 0;
+  try { best = parseInt(localStorage.getItem('best-2048') || '0', 10) || 0; } catch (e) {}
+  var history = [];
+  var uid = 0;
+  var locked = false;
+  var over = false;
+  var winShown = false;
+  var overlayKind = null;
+  var muted = false;
+
+  var NAME_KEY = 'player-name-2048';
+  var playerName = '';
+  try { playerName = localStorage.getItem(NAME_KEY) || ''; } catch (e) {}
+  var submittedScore = 0;
+  var onlineOk = true;
+
+  var PERIOD_KEY = 'lb-period-2048';
+  var period = 'week';
+  try { period = localStorage.getItem(PERIOD_KEY) || 'week'; } catch (e) {}
+  if (period !== 'week' && period !== 'all') period = 'week';
+  var myRanks = { week: null, all: null };
+
+  /* ============ 音效（WebAudio，零资源） ============ */
+  var actx = null;
+  function tone(freq, dur, type, vol) {
+    if (muted) return;
+    try {
+      if (!actx) {
+        var AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) return;
+        actx = new AC();
+      }
+      if (actx.state === 'suspended') actx.resume();
+      var t = actx.currentTime;
+      var osc = actx.createOscillator();
+      var gain = actx.createGain();
+      osc.type = type || 'sine';
+      osc.frequency.setValueAtTime(freq, t);
+      gain.gain.setValueAtTime(vol || 0.045, t);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + (dur || 0.08));
+      osc.connect(gain);
+      gain.connect(actx.destination);
+      osc.start(t);
+      osc.stop(t + (dur || 0.08) + 0.02);
+    } catch (e) { /* 静默失败 */ }
+  }
+  function sfxSlide() { tone(220, 0.05, 'sine', 0.028); }
+  function sfxMerge() { tone(560, 0.09, 'triangle', 0.05); setTimeout(function(){ tone(760, 0.08, 'triangle', 0.035); }, 55); }
+  function sfxWin()   { [523, 659, 784, 1046].forEach(function (f, i) { setTimeout(function () { tone(f, 0.22, 'triangle', 0.06); }, i * 110); }); }
+  function sfxOver()  { [330, 262, 196].forEach(function (f, i) { setTimeout(function () { tone(f, 0.3, 'sawtooth', 0.045); }, i * 130); }); }
+
+  /* ============ 数据层 ============ */
+  function grid() {
+    var g = [];
+    for (var r = 0; r < SIZE; r++) {
+      g.push([null, null, null, null]);
+    }
+    for (var i = 0; i < tiles.length; i++) {
+      g[tiles[i].r][tiles[i].c] = tiles[i];
+    }
+    return g;
+  }
+
+  function emptyCells() {
+    var g = grid(), out = [];
+    for (var r = 0; r < SIZE; r++) {
+      for (var c = 0; c < SIZE; c++) {
+        if (!g[r][c]) out.push({ r: r, c: c });
+      }
+    }
+    return out;
+  }
+
+  function canMove() {
+    var g = grid(), r, c;
+    for (r = 0; r < SIZE; r++) {
+      for (c = 0; c < SIZE; c++) {
+        var t = g[r][c];
+        if (!t) return true;
+        if (c + 1 < SIZE && g[r][c + 1] && g[r][c + 1].value === t.value) return true;
+        if (r + 1 < SIZE && g[r + 1][c] && g[r + 1][c].value === t.value) return true;
+      }
+    }
+    return false;
+  }
+
+  function maxValue() {
+    var m = 0;
+    for (var i = 0; i < tiles.length; i++) if (tiles[i].value > m) m = tiles[i].value;
+    return m;
+  }
+
+  /* ============ 渲染层 ============ */
+  function tileClass(v) {
+    return v <= 2048 ? ('t' + v) : 'tsuper';
+  }
+  function sizeClass(v) {
+    var n = String(v).length;
+    return n >= 5 ? 'v5' : n === 4 ? 'v4' : n === 3 ? 'v3' : '';
+  }
+
+  function paint(t) {
+    t.el.className = 'tile ' + tileClass(t.value) + ' ' + sizeClass(t.value);
+    t.el.textContent = t.value;
+  }
+
+  function makeTile(value, r, c, id) {
+    var el = document.createElement('div');
+    var t = { id: (id === undefined ? ++uid : id), value: value, r: r, c: c, el: el };
+    el.style.setProperty('--r', String(r));
+    el.style.setProperty('--c', String(c));
+    paint(t);
+    tilesEl.appendChild(el);
+    return t;
+  }
+
+  function spawn(value) {
+    var cells = emptyCells();
+    if (!cells.length) return null;
+    var pick = cells[Math.floor(Math.random() * cells.length)];
+    var v = value || (Math.random() < 0.9 ? 2 : 4);
+    var t = makeTile(v, pick.r, pick.c);
+    tiles.push(t);
+    /* 用独立的 scale 属性做动画，避免覆盖定位用的 transform；
+       不支持时退回 CSS 关键帧（.anim-in） */
+    animScale(
+      t.el,
+      [{ scale: '.35', opacity: 0 }, { scale: '1', opacity: 1 }],
+      { duration: 150, easing: 'cubic-bezier(.3,1.3,.5,1)' },
+      'anim-in'
+    );
+    return t;
+  }
+
+  function pop(el) {
+    animScale(
+      el,
+      [{ scale: '1' }, { scale: '1.16' }, { scale: '1' }],
+      { duration: 170, easing: 'cubic-bezier(.3,1.4,.5,1)' },
+      'anim-pop'
+    );
+  }
+
+  /* ============ 分数 ============ */
+  function setScore(v, gained) {
+    score = v;
+    scoreEl.textContent = score;
+    if (gained) {
+      var f = document.createElement('div');
+      f.className = 'float-score';
+      f.textContent = '+' + gained;
+      scoreBox.appendChild(f);
+      setTimeout(function () { if (f.parentNode) f.parentNode.removeChild(f); }, 740);
+      scoreBox.classList.remove('bump');
+      void scoreBox.offsetWidth;
+      scoreBox.classList.add('bump');
+    }
+    if (score > best) {
+      best = score;
+      try { localStorage.setItem('best-2048', String(best)); } catch (e) {}
+      bestEl.textContent = best;
+      bestBox.classList.remove('bump');
+      void bestBox.offsetWidth;
+      bestBox.classList.add('bump');
+    }
+  }
+
+  /* ============ 移动方向 → 线序列 ============ */
+  function lines(dir) {
+    var out = [], i, j, line;
+    if (dir === 'left' || dir === 'right') {
+      for (i = 0; i < SIZE; i++) {
+        line = [];
+        for (j = 0; j < SIZE; j++) line.push({ r: i, c: dir === 'left' ? j : SIZE - 1 - j });
+        out.push(line);
+      }
+    } else {
+      for (j = 0; j < SIZE; j++) {
+        line = [];
+        for (i = 0; i < SIZE; i++) line.push({ r: dir === 'up' ? i : SIZE - 1 - i, c: j });
+        out.push(line);
+      }
+    }
+    return out;
+  }
+
+  /* ============ 核心：移动 ============ */
+  function move(dir) {
+    if (locked || over) return;
+
+    var g = grid();
+    var allLines = lines(dir);
+    var plan = [];          // [{tile, cell}]
+    var merges = [];        // [{keep, absorb, value}]
+    var moved = false;
+    var li, i;
+
+    for (li = 0; li < allLines.length; li++) {
+      var line = allLines[li];
+      var seq = [];
+      for (i = 0; i < line.length; i++) {
+        var t0 = g[line[i].r][line[i].c];
+        if (t0) seq.push(t0);
+      }
+      var k = 0;
+      for (i = 0; i < seq.length;) {
+        var cell = line[k];
+        var t = seq[i];
+        if (i + 1 < seq.length && seq[i + 1].value === t.value) {
+          var a = seq[i + 1];
+          plan.push({ tile: t, cell: cell });
+          plan.push({ tile: a, cell: cell });
+          merges.push({ keep: t, absorb: a, value: t.value * 2 });
+          moved = true;
+          i += 2;
+        } else {
+          if (t.r !== cell.r || t.c !== cell.c) moved = true;
+          plan.push({ tile: t, cell: cell });
+          i += 1;
+        }
+        k += 1;
+      }
+    }
+
+    if (!moved) return;
+
+    /* 存档（用于撤销） */
+    history.push({
+      tiles: tiles.map(function (t) { return { id: t.id, value: t.value, r: t.r, c: t.c }; }),
+      score: score,
+      winShown: winShown
+    });
+    if (history.length > 30) history.shift();
+    undoBtn.disabled = false;
+
+    /* 应用新坐标 —— CSS transition 自动补间 */
+    for (i = 0; i < plan.length; i++) {
+      var p = plan[i];
+      p.tile.r = p.cell.r;
+      p.tile.c = p.cell.c;
+      p.tile.el.style.setProperty('--r', String(p.cell.r));
+      p.tile.el.style.setProperty('--c', String(p.cell.c));
+    }
+
+    locked = true;
+    sfxSlide();
+
+    setTimeout(function () {
+      var gained = 0;
+      for (var m = 0; m < merges.length; m++) {
+        var mg = merges[m];
+        if (mg.absorb.el.parentNode) mg.absorb.el.parentNode.removeChild(mg.absorb.el);
+        tiles = tiles.filter(function (x) { return x !== mg.absorb; });
+        mg.keep.value = mg.value;
+        paint(mg.keep);
+        pop(mg.keep.el);
+        gained += mg.value;
+      }
+
+      if (gained) { setScore(score + gained, gained); sfxMerge(); }
+      else { setScore(score); }
+
+      spawn();
+      locked = false;
+      checkState();
+    }, SLIDE_MS + 10);
+  }
+
+  /* ============ 状态判定 ============ */
+  function checkState() {
+    if (!winShown && maxValue() >= 2048) {
+      winShown = true;
+      showOverlay('win');
+      sfxWin();
+      burstConfetti();
+      return;
+    }
+    if (!canMove()) {
+      over = true;
+      showOverlay('over');
+      sfxOver();
+    }
+  }
+
+  function showOverlay(kind) {
+    overlayKind = kind;
+    if (kind === 'win') {
+      ovTitle.textContent = '达成 2048 🎉';
+      ovText.textContent = '要不要继续挑战更高的数字？';
+      ovBtn.textContent = '继续游戏';
+      ovBtn2.textContent = '再来一局';
+      ovBtn2.style.display = '';
+    } else {
+      ovTitle.textContent = '游戏结束';
+      ovText.textContent = '没有可以移动的方块了 · 本局得分 ' + score;
+      ovBtn.textContent = '再来一局';
+      ovBtn2.textContent = '撤销一步';
+      ovBtn2.style.display = history.length ? '' : 'none';
+    }
+    updateSubmitUI();
+    overlay.classList.add('show');
+  }
+
+  function hideOverlay() { overlay.classList.remove('show'); overlayKind = null; }
+
+  function burstConfetti() {
+    var colors = ['#f2b179', '#f67c5f', '#edcf72', '#edc22e', '#a8c66c', '#8ec5d6'];
+    for (var i = 0; i < 26; i++) {
+      var s = document.createElement('span');
+      s.className = 'confetti';
+      s.style.background = colors[i % colors.length];
+      s.style.left = '50%';
+      s.style.top = '46%';
+      s.style.setProperty('--dx', (Math.random() * 260 - 130).toFixed(0) + 'px');
+      s.style.setProperty('--dy', (-Math.random() * 190 - 40).toFixed(0) + 'px');
+      s.style.setProperty('--rot', (Math.random() * 720 - 360).toFixed(0) + 'deg');
+      boardEl.appendChild(s);
+      (function (node) {
+        setTimeout(function () { if (node.parentNode) node.parentNode.removeChild(node); }, 1150);
+      })(s);
+    }
+  }
+
+  /* ============ 撤销 ============ */
+  function undo() {
+    if (!history.length || locked) return;
+    var snap = history.pop();
+    tilesEl.innerHTML = '';
+    tiles = snap.tiles.map(function (s) {
+      return makeTile(s.value, s.r, s.c, s.id);
+    });
+    over = false;
+    winShown = snap.winShown;
+    hideOverlay();
+    setScore(snap.score);
+    undoBtn.disabled = history.length === 0;
+  }
+
+  /* ============ 开局 ============ */
+  function reset() {
+    tilesEl.innerHTML = '';
+    tiles = [];
+    history = [];
+    uid = 0;
+    score = 0;
+    over = false;
+    winShown = false;
+    locked = false;
+    submittedScore = 0;
+    submitBox.classList.remove('show');
+    submitMsg.textContent = '';
+    undoBtn.disabled = true;
+    hideOverlay();
+    scoreEl.textContent = '0';
+    bestEl.textContent = best;
+    spawn();
+    spawn();
+  }
+
+  /* ============ 排行榜 ============ */
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+
+  /* ---------- 接口地址 ----------
+     默认同源（自带服务端的部署，如 dist/ 与 dist-wc/）。
+     托管在 GitHub Pages 这类**纯静态**站点上时没有服务端，但排行榜仍用主站那一份数据，
+     所以这里把接口指向主站的绝对地址 —— 页面域名与被请求的接口域名不同，
+     因此服务端必须允许跨域（见 dist/server.py 的 CORS 头）。
+     需要换地址时可用 window.__KS_API_BASE__ 覆盖。 */
+  var API_BASE = (function () {
+    try {
+      if (window.__KS_API_BASE__ != null) {
+        return String(window.__KS_API_BASE__).replace(/\/+$/, '');
+      }
+      var h = (window.location && window.location.hostname) || '';
+      if (/(^|\.)github\.io$/i.test(h)) {
+        return 'https://10b243a4285f46048a2859b35c61bd6e.sg.agentos-app.run';
+      }
+    } catch (e) {}
+    return '';
+  })();
+
+  function apiGet(path) {
+    if (typeof fetch !== 'function') return Promise.reject(new Error('no fetch'));
+    return fetch(API_BASE + path, { cache: 'no-store' }).then(function (r) {
+      if (!r.ok) throw new Error('http ' + r.status);
+      return r.json();
+    });
+  }
+
+  function apiPost(path, body) {
+    if (typeof fetch !== 'function') return Promise.reject(new Error('no fetch'));
+    return fetch(API_BASE + path, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    }).then(function (r) { return r.json(); });
+  }
+
+  /* ---------- 排行榜后端：两种宿主共用同一套渲染 ----------
+     资料库在线页面模式下，平台会注入 window.__SMART_PAGE__.database；
+     独立部署（自带服务端）时没有这个对象，退回 fetch 接口；
+     两者都没有（离线打开 zip）时排行榜显示「暂无成绩」，游戏照常能玩。 */
+
+  var DATABASE_ID = (function () {
+    /* 资料库页面模式：把建表返回的 database_id 填在下面这个字符串里，
+       或在页面更早的位置设 window.__KS_DATABASE_ID__。留空则走服务端接口模式。 */
+    try { return window.__KS_DATABASE_ID__ || ''; } catch (e) { return ''; }
+  })();
+  var DB_FIELDS = { name: '昵称', score: '分数', tile: '最大方块', ts: '提交时间戳' };
+
+  function dbApi() {
+    try {
+      var sp = window.__SMART_PAGE__;
+      if (DATABASE_ID && sp && sp.database && typeof sp.database.query === 'function') {
+        return sp.database;
+      }
+    } catch (e) {}
+    return null;
+  }
+
+  function weekStartLocal() {
+    var d = new Date();
+    d.setHours(0, 0, 0, 0);
+    var dow = (d.getDay() + 6) % 7;               /* 周一记 0 */
+    return Math.floor(d.getTime() / 1000) - dow * 86400;
+  }
+
+  function nameKey(s) { return String(s == null ? '' : s).toLowerCase(); }
+
+  /* query 单次只回一页，必须自己翻页；续页游标入参固定叫 startCursor（写错会被静默丢弃→死循环） */
+  function dbLoadAll(db, cursor, acc, guard) {
+    acc = acc || []; guard = guard || 0;
+    if (guard > 100) return Promise.resolve(acc);
+    return db.query({
+      databaseId: DATABASE_ID,
+      pageSize: 200,
+      sorts: [{ property: DB_FIELDS.score, direction: 'descending' }],
+      startCursor: cursor
+    }).then(function (r) {
+      acc = acc.concat((r && r.results) || []);
+      var next = r && r.nextCursor;
+      if (r && r.hasMore && next && next !== cursor && (r.results || []).length) {
+        return dbLoadAll(db, next, acc, guard + 1);
+      }
+      return acc;
+    });
+  }
+
+  /* 平台记录 → 与旧接口同形的 {rank,name,score,tile,ts}；同名只留最高分（同分留更早的） */
+  function dbToBoard(rows, period) {
+    var since = weekStartLocal();
+    var list = [];
+    for (var i = 0; i < rows.length; i++) {
+      var r = rows[i] || {};
+      var ts = Number(r[DB_FIELDS.ts]) || 0;
+      if (period === 'week' && ts < since) continue;
+      list.push({
+        name: String(r[DB_FIELDS.name] == null ? '' : r[DB_FIELDS.name]) || '无名玩家',
+        score: Number(r[DB_FIELDS.score]) || 0,
+        tile: Number(r[DB_FIELDS.tile]) || 0,
+        ts: ts
+      });
+    }
+    list.sort(function (a, b) { return (b.score - a.score) || (a.ts - b.ts); });
+    var seen = {}, out = [];
+    for (var j = 0; j < list.length; j++) {
+      var k = nameKey(list[j].name);
+      if (seen[k]) continue;
+      seen[k] = 1;
+      list[j].rank = out.length + 1;
+      out.push(list[j]);
+    }
+    return out.slice(0, 20);
+  }
+
+  function boardFail() {
+    onlineOk = false;
+    lbList.innerHTML = '<div class="lb-empty">排行榜连不上<br>（离线打开页面时不可用）</div>';
+    lbFoot.textContent = '部署到线上后即可看到全服排名';
+  }
+
+  function closeLeaderboard() { lb.classList.remove('show'); }
+
+  function syncTabs() {
+    tabWeek.classList.toggle('active', period === 'week');
+    tabAll.classList.toggle('active', period === 'all');
+  }
+
+  function setPeriod(p) {
+    if (p !== 'week' && p !== 'all') return;
+    period = p;
+    try { localStorage.setItem(PERIOD_KEY, p); } catch (e) {}
+    openLeaderboard();
+  }
+
+  function openLeaderboard() {
+    lb.classList.add('show');
+    syncTabs();
+    lbList.innerHTML = '<div class="lb-empty">加载中…</div>';
+    lbFoot.textContent = '玩完一局即可上榜';
+
+    var db = dbApi();
+    if (db) {
+      dbLoadAll(db).then(function (rows) {
+        onlineOk = true;
+        renderBoard(dbToBoard(rows, period));
+      }).catch(boardFail);
+      return;
+    }
+
+    if (typeof fetch !== 'function') { boardFail(); return; }
+
+    apiGet('/api/scores?limit=20&period=' + period).then(function (data) {
+      onlineOk = true;
+      renderBoard((data && data.scores) || []);
+    }).catch(boardFail);
+  }
+
+  function renderBoard(rows) {
+    var mine = myRanks[period];
+    var emptyHint = period === 'week' ? '本周还没有人上榜<br>来抢本周第一' : '还没有人上榜<br>来抢第一名';
+    var idleHint = period === 'week' ? '本周榜 · 每周一重新开始' : '总榜 · 全部历史成绩';
+
+    if (!rows.length) {
+      lbList.innerHTML = '<div class="lb-empty">' + emptyHint + '</div>';
+      lbFoot.textContent = idleHint;
+      return;
+    }
+
+    var podium = rows.slice(0, 3);
+    var rest = rows.slice(3);
+    var order = [1, 0, 2];          /* 视觉顺序：第 2 名、第 1 名、第 3 名 */
+    var html = '<div class="podium">';
+    for (var k = 0; k < order.length; k++) {
+      var idx = order[k];
+      if (idx >= podium.length) continue;
+      var p = podium[idx];
+      html += '<div class="pd pd' + p.rank + (mine === p.rank ? ' me' : '') + '">' +
+                '<span class="pd-name">' + esc(p.name) + '</span>' +
+                '<span class="pd-meta">' +
+                  '<span class="pd-score">' + p.score + '</span>' +
+                  (p.tile >= 128 ? '<span class="pd-tile">' + p.tile + '</span>' : '') +
+                '</span>' +
+                '<span class="pd-bar">' + p.rank + '</span>' +
+              '</div>';
+    }
+    html += '</div>';
+
+    if (rest.length) {
+      html += '<div class="lb-sep"></div>';
+      for (var i = 0; i < rest.length; i++) {
+        var r = rest[i];
+        html += '<div class="lb-row' + (mine === r.rank ? ' me' : '') + '">' +
+                  '<span class="lb-rank">' + r.rank + '</span>' +
+                  '<span class="lb-name">' + esc(r.name) + '</span>' +
+                  (r.tile >= 128 ? '<span class="lb-tile">' + r.tile + '</span>' : '') +
+                  '<span class="lb-score">' + r.score + '</span>' +
+                '</div>';
+      }
+    }
+
+    lbList.innerHTML = html;
+    lbFoot.textContent = mine ? ('你当前排在第 ' + mine + ' 名') : idleHint;
+  }
+
+  function updateSubmitUI() {
+    var canSubmit = onlineOk && score > submittedScore;
+    submitBox.classList.toggle('show', canSubmit);
+    if (!canSubmit) return;
+    nameInput.value = playerName || '';
+    submitBtn.disabled = false;
+    submitBtn.textContent = '上榜';
+    submitMsg.textContent = '';
+  }
+
+  function doSubmit() {
+    var nm = (nameInput.value || '').replace(/\s+/g, ' ').trim().slice(0, 12);
+    if (!nm) { submitMsg.textContent = '先起个名字吧'; nameInput.focus(); return; }
+    playerName = nm;
+    try { localStorage.setItem(NAME_KEY, nm); } catch (e) {}
+    submitBtn.disabled = true;
+    submitBtn.textContent = '提交中…';
+    submitMsg.textContent = '';
+    var sent = score;
+
+    function done(rankAll, rankWeek) {
+      submittedScore = sent;
+      myRanks.all = rankAll || null;
+      myRanks.week = rankWeek || null;
+      submitBox.classList.remove('show');
+      openLeaderboard();
+    }
+    function fail(msg) {
+      submitMsg.textContent = msg;
+      submitBtn.disabled = false;
+      submitBtn.textContent = '重试';
+    }
+
+    var db = dbApi();
+    if (db) {
+      var props = {};
+      props[DB_FIELDS.name]  = { text: nm };
+      props[DB_FIELDS.score] = { number: sent };
+      props[DB_FIELDS.tile]  = { number: maxValue() };
+      props[DB_FIELDS.ts]    = { number: Math.floor(Date.now() / 1000) };
+      db.addRecord({ databaseId: DATABASE_ID, properties: props }).then(function () {
+        return dbLoadAll(db);
+      }).then(function (rows) {
+        var key = nameKey(nm), all = dbToBoard(rows, 'all'), week = dbToBoard(rows, 'week');
+        var ra = null, rw = null, i;
+        for (i = 0; i < all.length; i++)  { if (nameKey(all[i].name)  === key) { ra = all[i].rank;  break; } }
+        for (i = 0; i < week.length; i++) { if (nameKey(week[i].name) === key) { rw = week[i].rank; break; } }
+        done(ra, rw);
+      }).catch(function () { fail('提交失败，可以再试一次'); });
+      return;
+    }
+
+    if (typeof fetch !== 'function') { fail('提交失败，网络不通'); return; }
+
+    apiPost('/api/score', { name: nm, score: sent, tile: maxValue() }).then(function (res) {
+      if (!res || res.error) { fail('提交失败，可以再试一次'); return; }
+      done(res.rank, res.rankWeek);
+    }).catch(function () { fail('提交失败，网络不通'); });
+  }
+
+  /* ============ 输入 ============ */
+  var KEYS = {
+    ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'down',
+    a: 'left', d: 'right', w: 'up', s: 'down',
+    A: 'left', D: 'right', W: 'up', S: 'down'
+  };
+
+  document.addEventListener('keydown', function (e) {
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+
+    /* 正在输入昵称时，方向键/字母键归输入框，不要触发游戏操作 */
+    var tag = e.target && e.target.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+
+    /* 排行榜弹层打开时，屏蔽棋盘操作 */
+    if (lb.classList.contains('show')) {
+      if (e.key === 'Escape') { e.preventDefault(); closeLeaderboard(); }
+      return;
+    }
+
+    if (e.key === 'z' || e.key === 'Z') {
+      e.preventDefault();
+      undo();
+      return;
+    }
+    if (e.key === 'r' || e.key === 'R') {
+      e.preventDefault();
+      reset();
+      return;
+    }
+
+    var dir = KEYS[e.key];
+    if (!dir) return;
+    e.preventDefault();
+    if (overlay.classList.contains('show')) return;
+    move(dir);
+  }, { passive: false });
+
+  /* 触摸 / 鼠标拖拽 */
+  var start = null;
+  function onDown(x, y) { start = { x: x, y: y }; }
+  function onUp(x, y) {
+    if (!start) return;
+    var dx = x - start.x, dy = y - start.y;
+    start = null;
+    if (Math.abs(dx) < 22 && Math.abs(dy) < 22) return;
+    if (overlay.classList.contains('show')) return;
+    if (Math.abs(dx) > Math.abs(dy)) move(dx > 0 ? 'right' : 'left');
+    else move(dy > 0 ? 'down' : 'up');
+  }
+
+  boardEl.addEventListener('touchstart', function (e) {
+    var t = e.changedTouches[0];
+    onDown(t.clientX, t.clientY);
+  }, { passive: true });
+
+  boardEl.addEventListener('touchend', function (e) {
+    var t = e.changedTouches[0];
+    onUp(t.clientX, t.clientY);
+  }, { passive: true });
+
+  boardEl.addEventListener('touchmove', function (e) { e.preventDefault(); }, { passive: false });
+
+  boardEl.addEventListener('mousedown', function (e) {
+    if (e.button !== 0) return;
+    onDown(e.clientX, e.clientY);
+  });
+  window.addEventListener('mouseup', function (e) { onUp(e.clientX, e.clientY); });
+
+  /* ============ 按钮 ============ */
+  newBtn.addEventListener('click', reset);
+  undoBtn.addEventListener('click', undo);
+
+  lbBtn.addEventListener('click', function () { openLeaderboard(); });
+  tabWeek.addEventListener('click', function () { setPeriod('week'); });
+  tabAll.addEventListener('click', function () { setPeriod('all'); });
+  lbClose.addEventListener('click', closeLeaderboard);
+  lb.addEventListener('click', function (e) { if (e.target === lb) closeLeaderboard(); });
+  submitBtn.addEventListener('click', doSubmit);
+  nameInput.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') { e.preventDefault(); doSubmit(); }
+  });
+
+  soundBtn.addEventListener('click', function () {
+    muted = !muted;
+    soundBtn.textContent = muted ? '🔇' : '🔊';
+    if (!muted) sfxSlide();
+  });
+
+  ovBtn.addEventListener('click', function () {
+    if (overlayKind === 'win') {
+      hideOverlay();
+      checkState();          // 若此时已无路可走，立刻给出结算
+    } else {
+      reset();
+    }
+  });
+
+  ovBtn2.addEventListener('click', function () {
+    if (overlayKind === 'win') reset();
+    else undo();
+  });
+
+  /* 视口变化：重算棋盘边长 + 重新落位（tile 坐标靠 CSS 变量驱动） */
+  function relayout() {
+    fitBoard();
+    for (var i = 0; i < tiles.length; i++) {
+      tiles[i].el.style.setProperty('--r', String(tiles[i].r));
+      tiles[i].el.style.setProperty('--c', String(tiles[i].c));
+    }
+  }
+  window.addEventListener('resize', relayout);
+  window.addEventListener('orientationchange', function () {
+    setTimeout(relayout, 60);
+    setTimeout(function () { measureChrome(); relayout(); }, 350);
+  });
+
+  fitBoard();        /* 先按估算值定尺寸，避免首屏闪一下 */
+  reset();
+  measureChrome();   /* 再量出真实的顶部/底部占位，精修一次 */
+  fitBoard();
+})();
+</script>
+</body>
+</html>
